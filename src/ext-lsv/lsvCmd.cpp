@@ -1,6 +1,7 @@
 #include "base/abc/abc.h"
 #include "base/main/main.h"
 #include "base/main/mainInt.h"
+#include "sat/cnf/cnf.h"
 #include <set>
 #include <vector>
 #include <list>
@@ -12,12 +13,19 @@
 #include <typeinfo>
 
 using namespace std;
+extern "C" {
+  extern Aig_Man_t * Abc_NtkToDar(Abc_Ntk_t * pNtk,int fExors,int fRegisters);
+  extern Cnf_Dat_t *     Cnf_Derive( Aig_Man_t * pAig, int nOutputs );
+}
 static int Lsv_CommandPrintNodes(Abc_Frame_t* pAbc, int argc, char** argv);
 static int Lsv_CommandMFFC(Abc_Frame_t* pAbc, int argc, char** argv);
+static int lsv_or_bidec(Abc_Frame_t* pAbc, int argc, char** argv);
 
 void init(Abc_Frame_t* pAbc) {
   Cmd_CommandAdd(pAbc, "LSV", "lsv_print_nodes", Lsv_CommandPrintNodes, 0);
   Cmd_CommandAdd(pAbc, "LSV", "lsv_print_msfc", Lsv_CommandMFFC, 0);
+  Cmd_CommandAdd(pAbc, "LSV", "lsv_or_bidec", lsv_or_bidec, 0);
+
 }
 
 void destroy(Abc_Frame_t* pAbc) {}
@@ -49,21 +57,18 @@ public:
     void DFS(int Start);
     void DFSVisit(int vertex, int &time);
 
-    void CCDFS(int vertex,int num11,std::map < int,string > nodemap);                // 利用DFS 
-                // 利用BFS, 兩者邏輯完全相同
-    void SetCollapsing(int vertex);
-                   // 印出predecessor, 供驗証用, 非必要
-};
+    void CCDFS(int vertex,int num11,std::map < int,string > nodemap);                // ?拍DFS 
+                // ?拍BFS, ?抵?頛臬??函??    void SetCollapsing(int vertex);
+                   // ?啣predecessor, 靘?閮潛, ??閬?};
 void Graph::AddEdgeList(int from, int to){
     AdjList[from].push_back(to);
 }
 void Graph::DFS(int Start){
-    color = new int[num_vertex];           // 配置記憶體位置
-    discover = new int[num_vertex];
+    color = new int[num_vertex];           // ?蔭閮擃?蝵?    discover = new int[num_vertex];
     finish = new int[num_vertex];
     predecessor = new int[num_vertex];
 
-    int time = 0;                          // 初始化, 如圖三(b)
+    int time = 0;                          // ???? 憒?銝?b)
     for (int i = 0; i < num_vertex; i++) { 
         color[i] = 0;
         discover[i] = 0;
@@ -72,26 +77,24 @@ void Graph::DFS(int Start){
     }
 
     int i = Start;
-    for (int j = 0; j < num_vertex; j++) { // 檢查所有Graph中的vertex都要被搜尋到
-        if (color[i] == 0) {               // 若vertex不是白色, 則進行以該vertex作為起點之搜尋
-            DFSVisit(i, time);
+    for (int j = 0; j < num_vertex; j++) { // 瑼Ｘ??raph銝剔?vertex?質?鋡急?撠
+        if (color[i] == 0) {               // ?史ertex銝?質, ?脰?隞亥府vertex雿韏琿?銋?撠?            DFSVisit(i, time);
         }
-        i = j;                             // j會把AdjList完整走過一遍, 確保所有vertex都被搜尋過
-    }
+        i = j;                             // j??AdjList摰韏圈?銝?? 蝣箔???ertex?質◤????    }
 }
 
-void Graph::DFSVisit(int vertex, int &time){   // 一旦有vertex被發現而且是白色, 便進入DFSVisit()
-    color[vertex] = 1;                         // 把vertex塗成灰色
-    discover[vertex] = ++time;                 // 更新vertex的discover時間
-    for (std::list<int>::iterator itr = AdjList[vertex].begin();   // for loop參數太長
-         itr != AdjList[vertex].end(); itr++) {                    // 分成兩段
-        if (color[*itr] == 0) {                // 若搜尋到白色的vertex
-            predecessor[*itr] = vertex;        // 更新其predecessor
-            DFSVisit(*itr, time);              // 立刻以其作為新的搜尋起點, 進入新的DFSVisit()
+void Graph::DFSVisit(int vertex, int &time){   // 銝?行?vertex鋡怎?曇??舐?? 靘輸脣DFSVisit()
+    color[vertex] = 1;                         // ?ertex憛??啗
+    discover[vertex] = ++time;                 // ?湔vertex?iscover??
+    for (std::list<int>::iterator itr = AdjList[vertex].begin();   // for loop?憭芷
+         itr != AdjList[vertex].end(); itr++) {                    // ???拇挾
+        if (color[*itr] == 0) {                // ?交?撠?質?ertex
+            predecessor[*itr] = vertex;        // ?湔?酥redecessor
+            DFSVisit(*itr, time);              // 蝡隞亙雿?啁???韏琿?, ?脣?啁?DFSVisit()
         }
     }
-    color[vertex] = 2;                         // 當vertex已經搜尋過所有與之相連的vertex後, 將其塗黑
-    finish[vertex] = ++time;                   // 並更新finish時間
+    color[vertex] = 2;                         // ?鈞ertex撌脩???????銋???vertex敺? 撠憛?
+    finish[vertex] = ++time;                   // 銝行?逆inish??
 }
 void Graph::SetCollapsing(int current){
     int root;  // root
@@ -304,4 +307,224 @@ int Lsv_CommandMFFC(Abc_Frame_t* pAbc, int argc, char** argv) {
   return 0;
 
 
+}
+
+int lsv_or_bidec(Abc_Frame_t* pAbc, int argc, char** argv) {
+    Abc_Ntk_t* pNtk = Abc_FrameReadNtk(pAbc);
+    
+    Abc_Obj_t* pObj;
+    Abc_Ntk_t * pNtkOn1;
+    sat_solver * pSat;
+    Cnf_Dat_t * pCnf;
+    int i;
+    Abc_NtkForEachPo(pNtk,pObj,i){
+      
+      pNtkOn1 = Abc_NtkCreateCone( pNtk, Abc_ObjFanin0(pObj), Abc_ObjName(pObj), 0 );
+      if ( Abc_ObjFaninC0(pObj) )
+          Abc_ObjXorFaninC( Abc_NtkPo(pNtkOn1, 0), 0 );
+      Aig_Man_t* pMan = Abc_NtkToDar(pNtkOn1,0,0);
+      Aig_Obj_t * pCo = Aig_ManCo(  pMan,0 ) ;//PO 
+      Aig_Obj_t * pObj_Ci;
+      pCnf = Cnf_Derive( pMan, 1 );
+      int PI_var_num [Aig_ManCiNum(pMan)];
+      int PO_var_num = pCnf->pVarNums[pCo->Id];
+      int z = 0;
+      int j;
+      int nInitVars = pCnf->nVars;//varshift
+      int nCi = Aig_ManCiNum(pMan);
+      
+      
+      pSat = (sat_solver *)Cnf_DataWriteIntoSolver(pCnf,1,0);
+      sat_solver_setnvars(pSat, 3*nInitVars+2*nCi);
+      lit Lits[3];
+      Lits[0] = toLitCond(PO_var_num,0);
+      sat_solver_addclause(pSat,Lits,Lits+1);
+
+      Cnf_Dat_t * pCnf1 = Cnf_DataDup(pCnf);
+      Cnf_DataLift(pCnf1,nInitVars);
+      for (int i = 0; i < pCnf1->nClauses; i++ ){//changable
+        int temp = sat_solver_addclause( pSat, pCnf1->pClauses[i], pCnf1->pClauses[i+1] );
+        if ( !temp ){
+          sat_solver_delete( pSat );
+          std::cout<<"addclause fail!"<<std::endl;
+          
+        }
+      }
+
+      int PO_var_num1 = pCnf1->pVarNums[pCo->Id];
+      Lits[0] = toLitCond(PO_var_num1,1);
+      sat_solver_addclause(pSat,Lits,Lits+1);
+  
+      Cnf_Dat_t * pCnf2 = Cnf_DataDup(pCnf1);
+      Cnf_DataLift(pCnf2,nInitVars);
+      for (int i = 0; i < pCnf2->nClauses; i++ ){//changable
+        int temp = sat_solver_addclause( pSat, pCnf2->pClauses[i], pCnf2->pClauses[i+1] );
+        if ( !temp ){
+          sat_solver_delete( pSat );
+          std::cout<<"addclause fail!"<<std::endl;
+          
+        }
+      }
+
+      int PO_var_num2 = pCnf2->pVarNums[pCo->Id];
+      Lits[0] = toLitCond(PO_var_num2,1);
+      sat_solver_addclause(pSat,Lits,Lits+1);
+
+
+      int alpha  = 3*(nInitVars)+1,
+          //let beta = alpha+1 
+          id1st, id2nd, id3rd;
+
+      //Aig_Obj_t* pAigCi;
+      Aig_ManForEachCi( pMan, pObj_Ci, j ){
+        id3rd = pCnf->pVarNums[pObj_Ci->Id];
+        id2nd = id3rd - nInitVars;
+        id1st = id2nd - nInitVars;
+
+        //X X' alpha
+        //Lsv_AddClauseForEq( pSat, id1st, id2nd, alpha++);
+        int Cid;
+        //assert( iVarA >= 0 && iVarB >= 0 && iVarEn >= 0 );
+        lit Lits2 [3];
+        Lits2[0] = toLitCond( id1st, 0 );
+        Lits2[1] = toLitCond( id2nd, 1 );
+        Lits2[2] = toLitCond( alpha, 0 );
+        Cid = sat_solver_addclause( pSat, Lits2, Lits2 + 3 );
+        assert( Cid );
+
+        Lits2[0] = toLitCond( id1st, 1 );
+        Lits2[1] = toLitCond( id2nd, 0 );
+        Lits2[2] = toLitCond( alpha, 0 );
+        Cid = sat_solver_addclause( pSat, Lits2, Lits2 + 3 );
+        assert( Cid );
+        alpha++;
+        //X X" beta
+        //Lsv_AddClauseForEq( pSat, id1st, id3rd, alpha++);  
+        Lits2[0] = toLitCond( id1st, 0 );
+        Lits2[1] = toLitCond( id3rd, 1 );
+        Lits2[2] = toLitCond( alpha, 0 );
+        Cid = sat_solver_addclause( pSat, Lits2, Lits2 + 3 );
+        assert( Cid );
+
+        Lits2[0] = toLitCond( id1st, 1 );
+        Lits2[1] = toLitCond( id3rd, 0 );
+        Lits2[2] = toLitCond( alpha, 0 );
+        Cid = sat_solver_addclause( pSat, Lits2, Lits2 + 3 );
+        assert( Cid );
+        alpha++;
+      }
+      // for ( int m = 0;m< varshift;m++){
+      //       Lits[0] = unit_assumption[m].first;
+      //       Lits[1] = toLitCond(PI_var_num[m],1);
+      //       Lits[2] = toLitCond(PI_var_num[m]+varshift,0);
+      //       sat_solver_addclause(pSat,Lits,Lits+3);
+      //       Lits[0] = unit_assumption[m].first;
+      //       Lits[1] = toLitCond(PI_var_num[m],0);
+      //       Lits[2] = toLitCond(PI_var_num[m]+varshift,1);
+      //       sat_solver_addclause(pSat,Lits,Lits+3);
+      //     }
+      //     for (int m = 0;m< varshift;m++){
+      //       Lits[0] = unit_assumption[m].second;
+      //       Lits[1] = toLitCond(PI_var_num[m],1);
+      //       Lits[2] = toLitCond(PI_var_num[m]+2*varshift,0);
+      //       sat_solver_addclause(pSat,Lits,Lits+3);
+      //       Lits[0] = unit_assumption[m].second;
+      //       Lits[1] = toLitCond(PI_var_num[m],0);
+      //       Lits[2] = toLitCond(PI_var_num[m]+2*varshift,1);
+      //       sat_solver_addclause(pSat,Lits,Lits+3);
+      //     }
+      //Aig_ManForEachCi( pMan, pObj_Ci,  j ){
+      //  PI_var_num[z] = pCnf->pVarNums[pObj_Ci->Id];
+      //  z++;
+      //}
+
+      lit Lits1 [2*nCi];
+      for (int m = 0;m<2*nCi;m++){
+        Lits1[j] = toLitCond( (3*nInitVars + m + 1), 1 );
+      }
+
+
+
+
+
+      //int varshift = sat_solver_nvars(pSat);
+      //
+      //
+      //
+      //int PO_var_num1 = PO_var_num + varshift;
+      //int PO_var_num2 = PO_var_num1 + varshift;
+      
+      
+      
+      
+      //Cnf_Dat_t * pCnf2 = Cnf_DataDup(pCnf);
+      //Cnf_DataLift(pCnf2,varshift);
+      //Cnf_DataLift(pCnf2,varshift);
+      //Lits[0] = toLitCond(PO_var_num2,1);
+      //sat_solver_addclause(pSat,Lits,Lits+1);
+      lbool status = l_True;
+      //std::vector<std::pair<int,int>> unit_assumption(varshift, std::make_pair(0, 0));//first = alpha ,second = beta;
+      for (int k = 1;k < nCi;++k){
+        for (int l = 0;l < k; ++l){
+          Lits1[ 2*k   ]--; //alphaj=1
+          Lits1[(2*l)+1]--; //betak=1
+          
+          status = sat_solver_solve(pSat,Lits1,Lits1+2*nCi,0,0,0,0);
+          Lits1[ 2*k   ]++; //alphaj=1
+          Lits1[(2*l)+1]++; //betak=1
+          //final_size = sat_solver_final(pSat,)
+          if (status == l_False){
+            break;
+          }
+          
+          
+        }
+        if (status == l_False){
+            break;
+        }
+      }
+
+      if(status==l_False){
+        //unsat -> print
+        std::cout<<"PO "<<Abc_ObjName(pObj)<<" support partition: 1"<<std::endl;
+
+        //now Lits is alpha,beta
+        //initialize to all 1
+        for(j=0; j<2*nCi; ++j){ Lits1[j] = 1; }
+
+        int *pClauses, *pLit, *pStop;
+        int nFinalClause = sat_solver_final(pSat, &pClauses);
+        //std::cerr<<"nFinalClauses: "<<nFinalClause<<std::endl;
+        //assert at least two 1 in Lits
+        
+
+        for(j=0; j<nFinalClause; ++j){
+          for ( pLit = &pClauses[j], pStop = &pClauses[j+1]; pLit < pStop; pLit++ ){
+            Lits1[Abc_Lit2Var(*pLit)-(nInitVars*3)-1]=0;
+            //std::cout<<Abc_Lit2Var(*pLit)<<" ";
+          } //std::cout<<std::endl;
+        }
+
+        //just try to make XA and XB balance
+        int nXA=0, nXB=0;
+        for(j=0; j<nCi; ++j){
+          if     (Lits1[(2*j)]==0 && Lits1[(2*j)+1]==1) std::cout<<"1"; //alpha=0, beta=1 => XB
+          else if(Lits1[(2*j)]==1 && Lits1[(2*j)+1]==0) std::cout<<"2"; //alpha=1, beta=0 => XA
+          else if(Lits1[(2*j)]==0 && Lits1[(2*j)+1]==0) std::cout<<"0"; //alpha=0, beta=0 => XC
+          else if(nXA>nXB){ std::cout<<"1"; ++nXB; } 
+          else            { std::cout<<"2"; ++nXA; }  
+        }
+        std::cout<<std::endl;
+      }
+      else{
+        //sat -> print
+        //std::cout<<status;
+        assert(status==l_True|| nCi<=1);
+        std::cout<<"PO "<<Abc_ObjName(pObj)<<" support partition: 0"<<std::endl;
+      }
+      
+
+    }
+    
+    return 1;
 }
