@@ -57,18 +57,21 @@ public:
     void DFS(int Start);
     void DFSVisit(int vertex, int &time);
 
-    void CCDFS(int vertex,int num11,std::map < int,string > nodemap);                // ?拍DFS 
-                // ?拍BFS, ?抵?頛臬??函??    void SetCollapsing(int vertex);
-                   // ?啣predecessor, 靘?閮潛, ??閬?};
+    void CCDFS(int vertex,int num11,std::map < int,string > nodemap);                // 利用DFS 
+                // 利用BFS, 兩者邏輯完全相同
+    void SetCollapsing(int vertex);
+                   // 印出predecessor, 供驗証用, 非必要
+};
 void Graph::AddEdgeList(int from, int to){
     AdjList[from].push_back(to);
 }
 void Graph::DFS(int Start){
-    color = new int[num_vertex];           // ?蔭閮擃?蝵?    discover = new int[num_vertex];
+    color = new int[num_vertex];           // 配置記憶體位置
+    discover = new int[num_vertex];
     finish = new int[num_vertex];
     predecessor = new int[num_vertex];
 
-    int time = 0;                          // ???? 憒?銝?b)
+    int time = 0;                          // 初始化, 如圖三(b)
     for (int i = 0; i < num_vertex; i++) { 
         color[i] = 0;
         discover[i] = 0;
@@ -77,24 +80,26 @@ void Graph::DFS(int Start){
     }
 
     int i = Start;
-    for (int j = 0; j < num_vertex; j++) { // 瑼Ｘ??raph銝剔?vertex?質?鋡急?撠
-        if (color[i] == 0) {               // ?史ertex銝?質, ?脰?隞亥府vertex雿韏琿?銋?撠?            DFSVisit(i, time);
+    for (int j = 0; j < num_vertex; j++) { // 檢查所有Graph中的vertex都要被搜尋到
+        if (color[i] == 0) {               // 若vertex不是白色, 則進行以該vertex作為起點之搜尋
+            DFSVisit(i, time);
         }
-        i = j;                             // j??AdjList摰韏圈?銝?? 蝣箔???ertex?質◤????    }
+        i = j;                             // j會把AdjList完整走過一遍, 確保所有vertex都被搜尋過
+    }
 }
 
-void Graph::DFSVisit(int vertex, int &time){   // 銝?行?vertex鋡怎?曇??舐?? 靘輸脣DFSVisit()
-    color[vertex] = 1;                         // ?ertex憛??啗
-    discover[vertex] = ++time;                 // ?湔vertex?iscover??
-    for (std::list<int>::iterator itr = AdjList[vertex].begin();   // for loop?憭芷
-         itr != AdjList[vertex].end(); itr++) {                    // ???拇挾
-        if (color[*itr] == 0) {                // ?交?撠?質?ertex
-            predecessor[*itr] = vertex;        // ?湔?酥redecessor
-            DFSVisit(*itr, time);              // 蝡隞亙雿?啁???韏琿?, ?脣?啁?DFSVisit()
+void Graph::DFSVisit(int vertex, int &time){   // 一旦有vertex被發現而且是白色, 便進入DFSVisit()
+    color[vertex] = 1;                         // 把vertex塗成灰色
+    discover[vertex] = ++time;                 // 更新vertex的discover時間
+    for (std::list<int>::iterator itr = AdjList[vertex].begin();   // for loop參數太長
+         itr != AdjList[vertex].end(); itr++) {                    // 分成兩段
+        if (color[*itr] == 0) {                // 若搜尋到白色的vertex
+            predecessor[*itr] = vertex;        // 更新其predecessor
+            DFSVisit(*itr, time);              // 立刻以其作為新的搜尋起點, 進入新的DFSVisit()
         }
     }
-    color[vertex] = 2;                         // ?鈞ertex撌脩???????銋???vertex敺? 撠憛?
-    finish[vertex] = ++time;                   // 銝行?逆inish??
+    color[vertex] = 2;                         // 當vertex已經搜尋過所有與之相連的vertex後, 將其塗黑
+    finish[vertex] = ++time;                   // 並更新finish時間
 }
 void Graph::SetCollapsing(int current){
     int root;  // root
@@ -527,8 +532,4 @@ int lsv_or_bidec(Abc_Frame_t* pAbc, int argc, char** argv) {
     }
     
     return 1;
-<<<<<<< Updated upstream
 }
-=======
-}
->>>>>>> Stashed changes
